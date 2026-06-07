@@ -1,0 +1,166 @@
+services:
+  # ---- Toxiproxy sidecars for each node ----
+  toxiproxy0:
+    image: ghcr.io/shopify/toxiproxy:latest
+    networks:
+      - chaos-net
+    ports:
+      - "8470:8470"
+    command: -host=0.0.0.0 -port=8470
+
+  toxiproxy1:
+    image: ghcr.io/shopify/toxiproxy:latest
+    networks:
+      - chaos-net
+    ports:
+      - "8471:8471"
+    command: -host=0.0.0.0 -port=8471
+
+  toxiproxy2:
+    image: ghcr.io/shopify/toxiproxy:latest
+    networks:
+      - chaos-net
+    ports:
+      - "8472:8472"
+    command: -host=0.0.0.0 -port=8472
+
+  toxiproxy3:
+    image: ghcr.io/shopify/toxiproxy:latest
+    networks:
+      - chaos-net
+    ports:
+      - "8473:8473"
+    command: -host=0.0.0.0 -port=8473
+
+  toxiproxy4:
+    image: ghcr.io/shopify/toxiproxy:latest
+    networks:
+      - chaos-net
+    ports:
+      - "8474:8474"
+    command: -host=0.0.0.0 -port=8474
+
+  # ---- Paxos consensus nodes (all correct, no adversary) ----
+  node0:
+    build: .
+    networks:
+      - chaos-net
+    volumes:
+      - node_data:/data
+      - ./keys:/keys
+    command: >
+      python src/node.py --id 0 --mode paxos
+      --peers '[
+        ["toxiproxy1", 5001, 1],
+        ["toxiproxy2", 5002, 2],
+        ["toxiproxy3", 5003, 3],
+        ["toxiproxy4", 5004, 4]
+      ]'
+    depends_on:
+      - toxiproxy1
+      - toxiproxy2
+      - toxiproxy3
+      - toxiproxy4
+
+  node1:
+    build: .
+    networks:
+      - chaos-net
+    volumes:
+      - node_data:/data
+      - ./keys:/keys
+    command: >
+      python src/node.py --id 1 --mode paxos
+      --peers '[
+        ["toxiproxy0", 5000, 0],
+        ["toxiproxy2", 5002, 2],
+        ["toxiproxy3", 5003, 3],
+        ["toxiproxy4", 5004, 4]
+      ]'
+    depends_on:
+      - toxiproxy0
+      - toxiproxy2
+      - toxiproxy3
+      - toxiproxy4
+
+  node2:
+    build: .
+    networks:
+      - chaos-net
+    volumes:
+      - node_data:/data
+      - ./keys:/keys
+    command: >
+      python src/node.py --id 2 --mode paxos
+      --peers '[
+        ["toxiproxy0", 5000, 0],
+        ["toxiproxy1", 5001, 1],
+        ["toxiproxy3", 5003, 3],
+        ["toxiproxy4", 5004, 4]
+      ]'
+    depends_on:
+      - toxiproxy0
+      - toxiproxy1
+      - toxiproxy3
+      - toxiproxy4
+
+  node3:
+    build: .
+    networks:
+      - chaos-net
+    volumes:
+      - node_data:/data
+      - ./keys:/keys
+    command: >
+      python src/node.py --id 3 --mode paxos
+      --peers '[
+        ["toxiproxy0", 5000, 0],
+        ["toxiproxy1", 5001, 1],
+        ["toxiproxy2", 5002, 2],
+        ["toxiproxy4", 5004, 4]
+      ]'
+    depends_on:
+      - toxiproxy0
+      - toxiproxy1
+      - toxiproxy2
+      - toxiproxy4
+
+  node4:
+    build: .
+    networks:
+      - chaos-net
+    volumes:
+      - node_data:/data
+      - ./keys:/keys
+    command: >
+      python src/node.py --id 4 --mode paxos
+      --peers '[
+        ["toxiproxy0", 5000, 0],
+        ["toxiproxy1", 5001, 1],
+        ["toxiproxy2", 5002, 2],
+        ["toxiproxy3", 5003, 3]
+      ]'
+    depends_on:
+      - toxiproxy0
+      - toxiproxy1
+      - toxiproxy2
+      - toxiproxy3
+
+  client:
+    build: .
+    networks:
+      - chaos-net
+    command: python src/client.py toxiproxy0 5000
+    depends_on:
+      - node0
+      - node1
+      - node2
+      - node3
+      - node4
+
+volumes:
+  node_data:
+
+networks:
+  chaos-net:
+    driver: bridge
